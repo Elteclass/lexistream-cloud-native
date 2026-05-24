@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="LexiStream — Motor de análisis de texto cloud-native con procesamiento distribuido." />
+  <title>LexiStream · Text Analysis Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+
+  <!-- ═══════════════════════════════════════════════════
+       SIDEBAR — LEFT PANEL
+  ════════════════════════════════════════════════════ -->
+  <aside class="sidebar" id="sidebar" role="complementary" aria-label="Queue of files for processing">
+
+    <!-- Brand -->
+    <div class="sidebar__brand">
+      <div class="brand-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14,2 14,8 20,8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <polyline points="10,9 9,9 8,9" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <span class="brand-name">LexiStream</span>
+        <span class="brand-tagline">Text Analysis Engine</span>
+      </div>
+    </div>
+
+    <!-- ── UPLOAD ZONE ── -->
+    <section class="upload-section" aria-label="Upload zone for files">
+      <div id="drop-zone" class="drop-zone" role="region" aria-label="Zone for dragging and dropping files" tabindex="0"
+        aria-describedby="drop-zone-hint">
+        <div class="drop-zone__icon" aria-hidden="true">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17,8 12,3 7,8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+        </div>
+        <p class="drop-zone__title">Upload Zone <span class="drop-zone__limit">(10mb max.)</span></p>
+        <p class="drop-zone__hint" id="drop-zone-hint">Drag and drop .txt/.pdf<br />files here</p>
+
+        <!-- Hidden file input triggered by click -->
+        <input type="file" id="file-input" accept=".txt,.pdf" multiple hidden aria-label="File selection" />
+      </div>
+
+      <!-- Validation error banner -->
+      <div id="upload-error" class="upload-error" role="alert" aria-live="polite" hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        </svg>
+        <span id="upload-error-msg"></span>
+      </div>
+    </section>
+
+    <!-- ── LOCAL QUEUE ── -->
+    <section class="queue-section" aria-label="Queue of files for processing">
+      <div class="queue-header">
+        <h2 class="queue-title">LOCAL QUEUE</h2>
+        <span class="queue-count" id="queue-count" aria-live="polite">0</span>
+      </div>
+
+      <ul id="local-queue" class="local-queue" role="list" aria-label="Queue for processing" aria-live="polite">
+        <!-- Items injected by JS -->
+        <li class="queue-empty" id="queue-empty-msg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 3h18v18H3z" opacity=".1" fill="currentColor" />
+            <path d="M3 3h18v18H3z" />
+          </svg>
+          No files in the queue
+        </li>
+      </ul>
+    </section>
+
+    <!-- ── CTA BUTTON ── -->
+    <div class="sidebar__footer">
+      <button id="btn-start" class="btn-start" disabled aria-label="Start the distribution and analysis process"
+        aria-disabled="true">
+        <span class="btn-start__icon" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5,3 19,12 5,21" />
+          </svg>
+        </span>
+        <span class="btn-start__label">Start Distributor<br />Processing</span>
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════
+       MAIN CONTENT AREA (placeholder for other issues)
+  ════════════════════════════════════════════════════ -->
+  <main class="main-content" role="main" aria-label="Main content area">
+
+    <!-- Top nav tabs -->
+    <nav class="main-tabs" role="tablist" aria-label="Main tabs">
+      <button class="main-tab main-tab--active" role="tab" aria-selected="true" id="tab-analyzer">Analyzer &amp;
+        Results</button>
+      <button class="main-tab" role="tab" aria-selected="false" id="tab-dashboard">System Dashboard</button>
+    </nav>
+
+    <!-- Content placeholder -->
+    <div class="main-placeholder">
+      <div class="placeholder-graphic" aria-hidden="true">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
+          stroke-linecap="round" stroke-linejoin="round" opacity=".2">
+          <circle cx="12" cy="12" r="10" />
+          <polyline points="12,6 12,12 16,14" />
+        </svg>
+      </div>
+      <p class="placeholder-text">The results panel will be available<br />once Issue 2 is completed.</p>
+      <p class="placeholder-sub">Drag and drop a file into the side panel to start.</p>
+    </div>
+
+  </main>
+
+  <!-- ── Upload progress overlay ── -->
+  <div id="upload-toast" class="upload-toast" role="status" aria-live="polite" aria-atomic="true" hidden>
+    <div class="upload-toast__inner">
+      <div class="upload-toast__spinner" aria-hidden="true"></div>
+      <span id="upload-toast-msg">Uploading file…</span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>
