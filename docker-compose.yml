@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: ./backend
+    container_name: fastapi_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+      - REDIS_URL=redis://state_cache:6379
+    depends_on:
+      - state_cache
+    restart: unless-stopped
+
+  state_cache:
+    image: redis:alpine
+    container_name: redis_state_cache
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  worker_1:
+    build: 
+      context: ./workers
+    container_name: text_worker_01
+    environment:
+      - WORKER_ID=worker-01
+      - REDIS_URL=redis://state_cache:6379
+    depends_on:
+      - state_cache
+    restart: unless-stopped
+
+  worker_2:
+    build: 
+      context: ./workers
+    container_name: text_worker_02
+    environment:
+      - WORKER_ID=worker-02
+      - REDIS_URL=redis://state_cache:6379
+    depends_on:
+      - state_cache
+    restart: unless-stopped
+
+  worker_3:
+    build: 
+      context: ./workers
+    container_name: text_worker_03
+    environment:
+      - WORKER_ID=worker-03
+      - REDIS_URL=redis://state_cache:6379
+    depends_on:
+      - state_cache
+    restart: unless-stopped
