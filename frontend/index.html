@@ -107,27 +107,58 @@
   <!-- ═══════════════════════════════════════════════════
        MAIN CONTENT AREA (placeholder for other issues)
   ════════════════════════════════════════════════════ -->
-  <main class="main-content" role="main" aria-label="Main content area">
+  <main class="main-content" role="main">
 
-    <nav class="main-tabs" role="tablist" aria-label="Main tabs">
-      <button class="main-tab main-tab--active" role="tab" aria-selected="true" id="tab-analyzer">Analyzer &amp;
-        Results</button>
-      <button class="main-tab" role="tab" aria-selected="false" id="tab-dashboard">System Dashboard</button>
+    <nav class="main-tabs" role="tablist">
+      <button class="main-tab main-tab--active" role="tab">Analyzer &amp; Results</button>
+      <button class="main-tab" role="tab">System Dashboard</button>
     </nav>
 
-    <!-- Content placeholder -->
-    <div class="main-placeholder">
-      <div class="placeholder-graphic" aria-hidden="true">
-        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"
-          stroke-linecap="round" stroke-linejoin="round" opacity=".2">
-          <circle cx="12" cy="12" r="10" />
-          <polyline points="12,6 12,12 16,14" />
-        </svg>
-      </div>
-      <p class="placeholder-text">The results panel will be available<br />once Issue 2 is completed.</p>
-      <p class="placeholder-sub">Drag and drop a file into the side panel to start.</p>
-    </div>
+    <div id="analytical-panel" class="analytical-panel">
+        
+        <div class="panel-header">
+            <h2 class="analytical-title">Analytical Results</h2>
+            <div class="subtitle" id="current-filename">📁 Esperando documento...</div>
+        </div>
 
+        <div id="view-loading" class="view-loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Analyzing document... please wait</p>
+            <small>Initializing linguistic processor</small>
+        </div>
+
+        <div id="view-results" style="display: none;">
+            
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <p class="metric-label">Word Count</p>
+                    <p id="ui-words" class="metric-value">0</p>
+                </div>
+                <div class="metric-card">
+                    <p class="metric-label">Characters</p>
+                    <p id="ui-chars" class="metric-value">0</p>
+                </div>
+                <div class="metric-card">
+                    <p class="metric-label">Topic</p>
+                    <p id="ui-topic" class="metric-value">-</p>
+                </div>
+            </div>
+
+            <div class="content-grid">
+                <div class="summary-box">
+                    <p class="box-label">Extracted Summary</p>
+                    <p id="ui-summary" class="summary-text"></p>
+                </div>
+                <div class="chart-box">
+                    <p class="box-label">Word Frequency</p>
+                    <div class="canvas-container">
+                        <canvas id="wordChart" width="300" height="250"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
   </main>
 
   <!-- ── Upload progress overlay ── -->
