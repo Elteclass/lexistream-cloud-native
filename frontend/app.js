@@ -334,3 +334,77 @@ document.querySelectorAll('.main-tab').forEach(tab => {
 
 /*INITIAL RENDER*/
 renderQueue();
+
+/* ═══════════════════════════════════════════════════
+   ISSUE #3: MOTOR DE ANÁLISIS Y VISUALIZACIÓN
+════════════════════════════════════════════════════ */
+
+// Función global para manejar el cambio de vistas e inyectar datos
+window.renderAnalyticalResults = function(filename, taskData) {
+  const viewLoading = document.getElementById('view-loading');
+  const viewResults = document.getElementById('view-results');
+  const filenameTag = document.getElementById('current-filename');
+
+  if (filenameTag) filenameTag.innerText = `📁 ${filename}`;
+
+  if (taskData.status === "pendiente" || taskData.status === "en proceso") {
+      if(viewResults) viewResults.style.display = 'none';
+      if(viewLoading) viewLoading.style.display = 'flex';
+  } else if (taskData.status === "completada") {
+      if(viewLoading) viewLoading.style.display = 'none';
+      if(viewResults) viewResults.style.display = 'block';
+
+      const res = taskData.resultados;
+      
+      // Inyectar texto y números
+      document.getElementById('ui-words').innerText = res.word_count.toLocaleString();
+      document.getElementById('ui-chars').innerText = res.char_count.toLocaleString();
+      document.getElementById('ui-topic').innerText = res.topic;
+      document.getElementById('ui-summary').innerText = res.summary;
+
+      // Dibujar la gráfica
+      drawNativeBarChart(res.top_words);
+  }
+};
+
+// Dibujado de barras con Canvas HTML5 Nativo
+function drawNativeBarChart(topWords) {
+  const canvas = document.getElementById('wordChart');
+  if (!canvas) return;
+  
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (!topWords || topWords.length === 0) return;
+
+  const paddingX = 40;
+  const paddingY = 30;
+  const chartWidth = canvas.width - (paddingX * 2);
+  const chartHeight = canvas.height - (paddingY * 2);
+  const barWidth = chartWidth / topWords.length;
+  const maxFreq = topWords[0][1]; 
+
+  ctx.font = '12px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+
+  topWords.forEach((item, index) => {
+      const word = item[0];
+      const freq = item[1];
+      const barHeight = (freq / maxFreq) * chartHeight;
+      
+      const x = paddingX + (index * barWidth);
+      const y = canvas.height - paddingY - barHeight;
+
+      // Dibujar barra (Color Primary #3B82F6)
+      ctx.fillStyle = '#3B82F6';
+      ctx.fillRect(x + 10, y, barWidth - 20, barHeight);
+
+      // Texto de la palabra debajo
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillText(word, x + (barWidth / 2), canvas.height - 10);
+      
+      // Número encima de la barra
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(freq.toString(), x + (barWidth / 2), y - 5);
+  });
+}
