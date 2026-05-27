@@ -343,9 +343,9 @@ renderQueue();
 window.renderAnalyticalResults = function(filename, taskData) {
   const viewLoading = document.getElementById('view-loading');
   const viewResults = document.getElementById('view-results');
-  const filenameTag = document.getElementById('current-filename');
+  const filenameText = document.getElementById('filename-text');
 
-  if (filenameTag) filenameTag.innerText = `📁 ${filename}`;
+  if (filenameText) filenameText.innerText = filename;
 
   if (taskData.status === "pendiente" || taskData.status === "en proceso") {
       if(viewResults) viewResults.style.display = 'none';
