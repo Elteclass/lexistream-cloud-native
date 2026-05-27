@@ -742,6 +742,9 @@ body {
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.85rem;
   color: #94a3b8;
+  display: flex;         /* Agregado para el ícono SVG */
+  align-items: center;   /* Alineación vertical perfecta */
+  gap: 0.5rem;           /* Espacio entre el ícono y el texto */
 }
 
 /* Tarjetas Numéricas */
