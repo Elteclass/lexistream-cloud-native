@@ -29,9 +29,14 @@ services:
     build: 
       context: ./workers
     container_name: text_worker_01
+    env_file:
+      - .env
     environment:
       - WORKER_ID=worker-01
       - REDIS_URL=redis://state_cache:6379
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - SQS_QUEUE_URL=${SQS_QUEUE_URL}
     depends_on:
       - state_cache
     restart: unless-stopped
@@ -40,9 +45,14 @@ services:
     build: 
       context: ./workers
     container_name: text_worker_02
+    env_file:
+      - .env
     environment:
       - WORKER_ID=worker-02
       - REDIS_URL=redis://state_cache:6379
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - SQS_QUEUE_URL=${SQS_QUEUE_URL}
     depends_on:
       - state_cache
     restart: unless-stopped
@@ -51,9 +61,14 @@ services:
     build: 
       context: ./workers
     container_name: text_worker_03
+    env_file:
+      - .env
     environment:
       - WORKER_ID=worker-03
       - REDIS_URL=redis://state_cache:6379
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - SQS_QUEUE_URL=${SQS_QUEUE_URL}
     depends_on:
       - state_cache
     restart: unless-stopped
