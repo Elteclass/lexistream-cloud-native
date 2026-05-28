@@ -14,6 +14,8 @@ services:
       - S3_BUCKET_NAME=${S3_BUCKET_NAME}
       - SQS_QUEUE_URL=${SQS_QUEUE_URL}
       - REDIS_URL=redis://state_cache:6379
+      - WORKER_STALE_SECONDS=${WORKER_STALE_SECONDS:-15}
+      - LOGS_FETCH_LIMIT=${LOGS_FETCH_LIMIT:-10}
     depends_on:
       - state_cache
     restart: unless-stopped
@@ -34,6 +36,8 @@ services:
     environment:
       - WORKER_ID=worker-01
       - REDIS_URL=redis://state_cache:6379
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-5}
+      - WORKER_LOGS_CAP=${WORKER_LOGS_CAP:-200}
     depends_on:
       - state_cache
     restart: unless-stopped
@@ -47,6 +51,8 @@ services:
     environment:
       - WORKER_ID=worker-02
       - REDIS_URL=redis://state_cache:6379
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-5}
+      - WORKER_LOGS_CAP=${WORKER_LOGS_CAP:-200}
     depends_on:
       - state_cache
     restart: unless-stopped
@@ -60,6 +66,8 @@ services:
     environment:
       - WORKER_ID=worker-03
       - REDIS_URL=redis://state_cache:6379
+      - HEARTBEAT_INTERVAL=${HEARTBEAT_INTERVAL:-5}
+      - WORKER_LOGS_CAP=${WORKER_LOGS_CAP:-200}
     depends_on:
       - state_cache
     restart: unless-stopped
