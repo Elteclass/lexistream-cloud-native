@@ -5,5 +5,8 @@ __pycache__/
 .venv/
 .env
 
+# Personal notes
+devnotes.md
+
 # OS
 .DS_Store
