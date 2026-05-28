@@ -19,6 +19,15 @@ const queueEmptyMsg = document.getElementById('queue-empty-msg');
 const processedListEl = document.getElementById('processed-list');
 const processedCountEl = document.getElementById('processed-count');
 const processedEmptyMsg = document.getElementById('processed-empty-msg');
+const analyzerPanel = document.getElementById('analyzer-panel');
+const dashboardPanel = document.getElementById('dashboard-panel');
+const workerGridEl = document.getElementById('worker-grid');
+const systemLogGroupsEl = document.getElementById('system-log-groups');
+const dashboardConnectionStatusEl = document.getElementById('dashboard-connection-status');
+const dashboardTotalCountEl = document.getElementById('dashboard-total-count');
+const dashboardIdleCountEl = document.getElementById('dashboard-idle-count');
+const dashboardProcessingCountEl = document.getElementById('dashboard-processing-count');
+const dashboardDownCountEl = document.getElementById('dashboard-down-count');
 
 /*
 LOCAL QUEUE STATE
@@ -28,6 +37,36 @@ status: 'pending' | 'uploading' | 'success' | 'error'
 let queue = [];
 let idCounter = 0;
 const processedTasks = new Map();
+let telemetrySource = null;
+let dashboardWorkers = [];
+const logsByWorker = {};
+const MAX_LOG_LINES_PER_WORKER = 70;
+const tabs = Array.from(document.querySelectorAll('.main-tab'));
+const tabPanels = {
+  'tab-analyzer': analyzerPanel,
+  'tab-dashboard': dashboardPanel,
+};
+
+const dashboardFallback = {
+  workers: [
+    { worker_id: 'wk-nx-01', state: 'IDLE', uptime: 13445, tasks_done: 42 },
+    { worker_id: 'wk-nx-02', state: 'PROCESSING', uptime: 13304, tasks_done: 104 },
+    { worker_id: 'wk-nx-03', state: 'IDLE', uptime: 7750, tasks_done: 12 },
+  ],
+  logs: {
+    'wk-nx-01': [
+      { timestamp: 1716902400, state: 'INFO', message: 'Node joined telemetry channel.' },
+      { timestamp: 1716902460, state: 'INFO', message: 'Awaiting new batch assignments.' },
+    ],
+    'wk-nx-02': [
+      { timestamp: 1716902520, state: 'INFO', message: 'Worker-2 connected to task queue.' },
+      { timestamp: 1716902580, state: 'DEBUG', message: 'Processing 1500 documents.' },
+    ],
+    'wk-nx-03': [
+      { timestamp: 1716902100, state: 'INFO', message: 'Health heartbeat received.' },
+    ],
+  },
+};
 
 /*UTILITIES*/
 /** Format bytes to human-readable string */
@@ -59,6 +98,261 @@ function showToast(msg) {
 }
 function hideToast() {
   uploadToast.hidden = true;
+}
+
+function formatTimestamp(timestamp) {
+  const date = new Date((timestamp || Date.now() / 1000) * 1000);
+  return date.toLocaleTimeString([], { hour12: false });
+}
+
+function formatDuration(seconds) {
+  const safe = Math.max(0, Number(seconds) || 0);
+  const hh = String(Math.floor(safe / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((safe % 3600) / 60)).padStart(2, '0');
+  const ss = String(Math.floor(safe % 60)).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
+function getWorkerStateClass(state) {
+  if (state === 'PROCESSING') return 'worker-card--processing';
+  if (state === 'DOWN') return 'worker-card--down';
+  return 'worker-card--idle';
+}
+
+function getDisplayWorkerName(workerId) {
+  const normalized = String(workerId || '').toLowerCase().replace(/_/g, '-');
+  const match = normalized.match(/(\d+)/);
+  if (match) return `Worker-${match[1]}`;
+  return String(workerId || 'Worker-?');
+}
+
+function getDisplayNodeId(workerId) {
+  const normalized = String(workerId || '').toLowerCase().replace(/_/g, '-');
+  const match = normalized.match(/(\d+)/);
+  if (match) return `wk-nx-0${match[1]}`;
+  return 'wk-nx-00';
+}
+
+function getRelativeAge(timestamp) {
+  if (!timestamp) return 'no entries yet';
+  const delta = Math.max(0, Math.round(Date.now() / 1000 - timestamp));
+  if (delta < 5) return 'just now';
+  if (delta < 60) return `${delta}s ago`;
+  if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
+  return `${Math.floor(delta / 3600)}h ago`;
+}
+
+function renderLogGroups() {
+  if (!systemLogGroupsEl) return;
+
+  const workerIds = Object.keys(logsByWorker).sort((a, b) => a.localeCompare(b));
+  systemLogGroupsEl.innerHTML = '';
+
+  if (workerIds.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'system-log-group system-log-group--empty';
+    empty.textContent = 'Waiting for worker logs...';
+    systemLogGroupsEl.appendChild(empty);
+    return;
+  }
+
+  workerIds.forEach((workerId, index) => {
+    const lines = logsByWorker[workerId] || [];
+    const details = document.createElement('details');
+    details.className = 'system-log-group';
+    details.open = index === 0;
+
+    const summary = document.createElement('summary');
+    summary.className = 'system-log-group__summary';
+    const latest = lines.length ? lines[lines.length - 1] : null;
+    const liveHint = latest && (Date.now() / 1000 - (latest.timestamp || 0)) < 20 ? 'Streaming' : 'Idle';
+    summary.innerHTML = `
+      <span class="system-log-group__worker">${getDisplayWorkerName(workerId)} Logs</span>
+      <span class="system-log-group__meta">${liveHint} · Last entry: ${getRelativeAge(lines.length ? lines[lines.length - 1].timestamp : 0)}</span>
+    `;
+
+    const terminal = document.createElement('div');
+    terminal.className = 'system-terminal';
+
+    const output = document.createElement('div');
+    output.className = 'system-terminal__output';
+    lines.forEach((entry) => {
+      const line = document.createElement('div');
+      line.className = 'system-terminal__line';
+      const message = entry.message || entry.state || 'event received';
+      line.textContent = `[${formatTimestamp(entry.timestamp)}] [${entry.state || 'INFO'}] ${message}`;
+      output.appendChild(line);
+    });
+
+    terminal.appendChild(output);
+    details.appendChild(summary);
+    details.appendChild(terminal);
+    systemLogGroupsEl.appendChild(details);
+  });
+}
+
+function renderWorkerCards(workers) {
+  if (!workerGridEl) return;
+
+  workerGridEl.innerHTML = '';
+
+  if (!workers.length) {
+    const emptyCard = document.createElement('article');
+    emptyCard.className = 'worker-card worker-card--empty';
+    emptyCard.innerHTML = '<p>No workers are reporting yet.</p>';
+    workerGridEl.appendChild(emptyCard);
+    return;
+  }
+
+  workers.forEach((worker) => {
+    const card = document.createElement('article');
+    const stateClass = getWorkerStateClass(worker.state);
+    card.className = `worker-card ${stateClass}`;
+    card.innerHTML = `
+      <div class="worker-card__header">
+        <div>
+          <p class="worker-card__label">${getDisplayWorkerName(worker.worker_id)}</p>
+          <h3 class="worker-card__id">ID: ${getDisplayNodeId(worker.worker_id)}</h3>
+        </div>
+        <span class="worker-status ${stateClass.replace('worker-card', 'worker-status')}">${worker.state}</span>
+      </div>
+      <dl class="worker-card__metrics">
+        <div>
+          <dt>Uptime</dt>
+          <dd>${formatDuration(worker.uptime)}</dd>
+        </div>
+        <div>
+          <dt>Tasks</dt>
+          <dd>${worker.tasks_done} tasks completed</dd>
+        </div>
+      </dl>
+    `;
+    workerGridEl.appendChild(card);
+  });
+}
+
+function renderDashboardSummary(workers) {
+  const total = workers.length;
+  const idle = workers.filter((worker) => worker.state === 'IDLE').length;
+  const processing = workers.filter((worker) => worker.state === 'PROCESSING').length;
+  const down = workers.filter((worker) => worker.state === 'DOWN').length;
+
+  dashboardTotalCountEl.textContent = String(total);
+  dashboardIdleCountEl.textContent = String(idle);
+  dashboardProcessingCountEl.textContent = String(processing);
+  dashboardDownCountEl.textContent = String(down);
+}
+
+function renderTelemetrySnapshot(payload) {
+  const workers = Array.isArray(payload.workers) ? payload.workers : [];
+  dashboardWorkers = workers;
+  renderDashboardSummary(workers);
+  renderWorkerCards(workers);
+}
+
+function seedDashboardFallback() {
+  if (dashboardWorkers.length > 0) return;
+  renderTelemetrySnapshot(dashboardFallback);
+  Object.entries(dashboardFallback.logs).forEach(([workerId, entries]) => {
+    logsByWorker[workerId] = entries.slice();
+  });
+  renderLogGroups();
+}
+
+async function loadTelemetrySnapshot() {
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/system-telemetry/snapshot`, {
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!response.ok) {
+      seedDashboardFallback();
+      return;
+    }
+
+    const payload = await response.json();
+    renderTelemetrySnapshot(payload);
+    if (!Array.isArray(payload.workers) || payload.workers.length === 0) {
+      seedDashboardFallback();
+    }
+  } catch (error) {
+    console.warn('[LexiStream] Unable to load telemetry snapshot:', error);
+    seedDashboardFallback();
+  }
+}
+
+function openTelemetryStream() {
+  if (telemetrySource) return;
+
+  try {
+    telemetrySource = new EventSource(`${BACKEND_URL}/api/system-telemetry`);
+    dashboardConnectionStatusEl.textContent = 'SYS.CONN: LINKING';
+    renderLogGroups();
+
+    telemetrySource.addEventListener('open', () => {
+      dashboardConnectionStatusEl.textContent = 'SYS.CONN: STABLE';
+    });
+
+    telemetrySource.addEventListener('telemetry', (event) => {
+      renderTelemetrySnapshot(JSON.parse(event.data));
+    });
+
+    telemetrySource.addEventListener('log', (event) => {
+      const entry = JSON.parse(event.data);
+      const workerId = entry.worker_id || 'system';
+      if (!logsByWorker[workerId]) logsByWorker[workerId] = [];
+      logsByWorker[workerId].push(entry);
+      if (logsByWorker[workerId].length > MAX_LOG_LINES_PER_WORKER) {
+        logsByWorker[workerId] = logsByWorker[workerId].slice(-MAX_LOG_LINES_PER_WORKER);
+      }
+      renderLogGroups();
+    });
+
+    telemetrySource.onerror = () => {
+      dashboardConnectionStatusEl.textContent = 'SYS.CONN: RETRY';
+    };
+  } catch (error) {
+    console.warn('[LexiStream] Telemetry stream unavailable:', error);
+    seedDashboardFallback();
+  }
+}
+
+function closeTelemetryStream() {
+  if (telemetrySource) {
+    telemetrySource.close();
+    telemetrySource = null;
+  }
+
+  if (dashboardConnectionStatusEl) {
+    dashboardConnectionStatusEl.textContent = 'SYS.CONN: DISCONNECTED';
+  }
+}
+
+function activateTab(tabId) {
+  tabs.forEach(tab => {
+    const isActive = tab.id === tabId;
+    tab.classList.toggle('main-tab--active', isActive);
+    tab.setAttribute('aria-selected', String(isActive));
+  });
+
+  Object.entries(tabPanels).forEach(([panelId, panel]) => {
+    if (!panel) return;
+    panel.hidden = panelId !== tabId;
+  });
+
+  if (tabId === 'tab-dashboard') {
+    loadTelemetrySnapshot();
+    openTelemetryStream();
+    if (dashboardWorkers.length > 0) {
+      renderWorkerCards(dashboardWorkers);
+      renderDashboardSummary(dashboardWorkers);
+    } else {
+      seedDashboardFallback();
+    }
+    renderLogGroups();
+  } else {
+    closeTelemetryStream();
+  }
 }
 
 function statusToLabel(status) {
@@ -430,20 +724,14 @@ btnStart.addEventListener('click', async () => {
 });
 
 /*TAB SWITCHING*/
-document.querySelectorAll('.main-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.main-tab').forEach(t => {
-      t.classList.remove('main-tab--active');
-      t.setAttribute('aria-selected', 'false');
-    });
-    tab.classList.add('main-tab--active');
-    tab.setAttribute('aria-selected', 'true');
-  });
+tabs.forEach(tab => {
+  tab.addEventListener('click', () => activateTab(tab.id));
 });
 
 /*INITIAL RENDER*/
 renderQueue();
 renderProcessedEmptyState();
+activateTab('tab-analyzer');
 
 /* ═══════════════════════════════════════════════════
    ISSUE #3: MOTOR DE ANÁLISIS Y VISUALIZACIÓN
