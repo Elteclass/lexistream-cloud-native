@@ -624,6 +624,114 @@ body {
   color: var(--text-primary);
 }
 
+/* ── Processed Files ── */
+.processed-section {
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.processed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.processed-title {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.processed-count {
+  font-size: .65rem;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--color-accent);
+  background: var(--color-accent-dim);
+  border: 1px solid rgba(88, 166, 255, .2);
+  padding: 1px 7px;
+  border-radius: 20px;
+  min-width: 22px;
+  text-align: center;
+}
+
+.processed-list {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  padding-bottom: 16px;
+}
+
+.processed-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: .72rem;
+  font-style: italic;
+  padding: 10px 8px;
+}
+
+.processed-item {
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.processed-item:hover {
+  border-color: var(--color-border);
+  background: var(--color-surface-alt);
+}
+
+.processed-item__name {
+  font-size: .78rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.processed-item__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: .65rem;
+  color: var(--text-secondary);
+}
+
+.processed-item__status {
+  font-weight: 600;
+}
+
+.processed-item.pending .processed-item__status {
+  color: var(--color-warning);
+}
+
+.processed-item.processing .processed-item__status {
+  color: var(--color-accent);
+}
+
+.processed-item.completed .processed-item__status {
+  color: var(--color-success);
+}
+
+.processed-item.error .processed-item__status {
+  color: var(--color-error);
+}
+
 /* ── Placeholder content ── */
 .main-placeholder {
   flex: 1;
