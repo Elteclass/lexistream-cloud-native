@@ -888,6 +888,12 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
+  align-items: start;
+}
+
+.summary-box,
+.chart-box {
+  min-width: 0;
 }
 
 .box-label {
@@ -903,11 +909,24 @@ body {
 .summary-text {
   color: #cbd5e1;
   line-height: 1.7;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .canvas-container {
   width: 100%;
   overflow: hidden;
+}
+
+.canvas-container canvas {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 /* ═══════════════════════════════════════════════════

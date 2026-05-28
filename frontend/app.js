@@ -808,32 +808,46 @@ function drawNativeBarChart(topWords) {
 
   if (!topWords || topWords.length === 0) return;
 
-  const paddingX = 40;
-  const paddingY = 30;
+  const paddingX = 30;
+  const paddingTop = 26;
+  const paddingBottom = 74;
   const chartWidth = canvas.width - (paddingX * 2);
-  const chartHeight = canvas.height - (paddingY * 2);
+  const chartHeight = canvas.height - paddingTop - paddingBottom;
   const barWidth = chartWidth / topWords.length;
   const maxFreq = topWords[0][1]; 
 
-  ctx.font = '12px "JetBrains Mono", monospace';
+  ctx.font = '11px "JetBrains Mono", monospace';
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  function shortenLabel(label, maxLength = 12) {
+    const value = String(label || '');
+    if (value.length <= maxLength) return value;
+    return `${value.slice(0, maxLength - 1)}…`;
+  }
 
   topWords.forEach((item, index) => {
-      const word = item[0];
+      const word = shortenLabel(item[0]);
       const freq = item[1];
       const barHeight = (freq / maxFreq) * chartHeight;
       
       const x = paddingX + (index * barWidth);
-      const y = canvas.height - paddingY - barHeight;
+      const y = canvas.height - paddingBottom - barHeight;
 
       // Dibujar barra (Color Primary #3B82F6)
       ctx.fillStyle = '#3B82F6';
       ctx.fillRect(x + 10, y, barWidth - 20, barHeight);
 
-      // Texto de la palabra debajo
+      // Etiqueta diagonal debajo de la barra.
+      const labelX = x + (barWidth / 2) - 8;
+      const labelY = canvas.height - 18;
+      ctx.save();
+      ctx.translate(labelX, labelY);
+      ctx.rotate(-Math.PI / 4);
       ctx.fillStyle = '#94A3B8';
-      ctx.fillText(word, x + (barWidth / 2), canvas.height - 10);
-      
+      ctx.fillText(word, 0, 0);
+      ctx.restore();
+
       // Número encima de la barra
       ctx.fillStyle = '#FFFFFF';
       ctx.fillText(freq.toString(), x + (barWidth / 2), y - 5);
