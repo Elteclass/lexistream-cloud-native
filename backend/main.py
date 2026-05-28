@@ -30,6 +30,10 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://state_cache:6379")
 
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
+# Telemetry config
+WORKER_STALE_SECONDS = int(os.getenv("WORKER_STALE_SECONDS", "15"))
+LOGS_FETCH_LIMIT = int(os.getenv("LOGS_FETCH_LIMIT", "10"))
+
 
 @app.get("/")
 def read_root():
@@ -169,5 +173,109 @@ def stream_task(task_id: str):
                 last_payload = payload
                 yield f"data: {payload}\n\n"
             time.sleep(1)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.get("/api/system-telemetry/snapshot")
+def telemetry_snapshot():
+    """Return a JSON snapshot of current workers read from Redis.
+
+    The Redis hash `system:workers_status` is expected to contain per-worker JSON payloads.
+    """
+    try:
+        raw = r.hgetall("system:workers_status") or {}
+        workers = []
+        now_ts = int(time.time())
+        for wid, payload in raw.items():
+            try:
+                obj = json.loads(payload)
+            except Exception:
+                # skip malformed entries
+                continue
+            # mark stale workers as DOWN
+            last = int(obj.get("last_seen", 0))
+            if now_ts - last > WORKER_STALE_SECONDS:
+                obj["state"] = "DOWN"
+            workers.append(obj)
+
+        return {"workers": workers}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Telemetry snapshot error: {str(e)}")
+
+
+@app.get("/api/system-telemetry")
+def system_telemetry():
+    """SSE stream that emits `telemetry` events (fleet snapshot) and `log` events (per-worker latest logs).
+
+    Polls Redis regularly and yields SSE events when changes are observed.
+    """
+    def event_generator():
+        last_snapshot = None
+        last_log_by_worker = {}
+
+        try:
+            while True:
+                try:
+                    raw = r.hgetall("system:workers_status") or {}
+                    now_ts = int(time.time())
+                    workers = []
+
+                    for wid, payload in raw.items():
+                        try:
+                            obj = json.loads(payload)
+                        except Exception:
+                            continue
+                        last = int(obj.get("last_seen", 0))
+                        if now_ts - last > WORKER_STALE_SECONDS:
+                            obj["state"] = "DOWN"
+                        workers.append(obj)
+
+                    snapshot = {"workers": workers}
+
+                    snap_text = json.dumps(snapshot, sort_keys=True)
+                    if snap_text != last_snapshot:
+                        last_snapshot = snap_text
+                        yield f"event: telemetry\ndata: {snap_text}\n\n"
+
+                    # Check per-worker latest log entries
+                    for w in workers:
+                        wid = w.get("worker_id")
+                        if not wid:
+                            continue
+                        key = f"system:workers_logs:{wid}"
+                        try:
+                            entries = r.lrange(key, 0, LOGS_FETCH_LIMIT - 1) or []
+                        except Exception:
+                            entries = []
+
+                        # iterate newest-first and yield any not yet seen (in reverse to preserve order)
+                        for raw_entry in reversed(entries):
+                            if not raw_entry:
+                                continue
+                            last_seen_raw = last_log_by_worker.get(wid)
+                            if last_seen_raw == raw_entry:
+                                # already seen this and everything newer (since we reversed)
+                                break
+                            # yield this log
+                            try:
+                                entry_obj = json.loads(raw_entry)
+                            except Exception:
+                                entry_obj = {"message": raw_entry}
+
+                            yield f"event: log\ndata: {json.dumps(entry_obj)}\n\n"
+
+                        if entries:
+                            last_log_by_worker[wid] = entries[0]
+
+                except GeneratorExit:
+                    break
+                except Exception:
+                    # Avoid bubbling errors to the client; continue polling
+                    pass
+
+                time.sleep(1)
+        finally:
+            return
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
