@@ -275,9 +275,17 @@ function renderTelemetrySnapshot(payload) {
   renderWorkerCards(workers);
 
   if (telemetryMode === 'live') {
+    const liveWorkerIds = new Set(workers.map((worker) => worker.worker_id));
+
     Object.keys(logsByWorker).forEach((workerId) => {
-      if (workerId.startsWith('wk-nx-')) {
+      if (workerId.startsWith('wk-nx-') || !liveWorkerIds.has(workerId)) {
         delete logsByWorker[workerId];
+      }
+    });
+
+    workers.forEach((worker) => {
+      if (!logsByWorker[worker.worker_id]) {
+        logsByWorker[worker.worker_id] = [];
       }
     });
   }
@@ -802,50 +810,77 @@ window.renderAnalyticalResults = function(filename, taskData) {
 function drawNativeBarChart(topWords) {
   const canvas = document.getElementById('wordChart');
   if (!canvas) return;
-  
+
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!ctx) return;
+
+  const displayWidth = Math.max(1, Math.floor(canvas.clientWidth || 220));
+  const displayHeight = Math.max(1, Math.floor(canvas.clientHeight || 140));
+  const dpr = window.devicePixelRatio || 1;
+
+  const targetWidth = Math.round(displayWidth * dpr);
+  const targetHeight = Math.round(displayHeight * dpr);
+
+  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, displayWidth, displayHeight);
 
   if (!topWords || topWords.length === 0) return;
 
-  const paddingX = 30;
-  const paddingTop = 26;
-  const paddingBottom = 74;
-  const chartWidth = canvas.width - (paddingX * 2);
-  const chartHeight = canvas.height - paddingTop - paddingBottom;
+  const paddingX = 18;
+  const paddingTop = 14;
+  const paddingBottom = 54;
+  const chartWidth = displayWidth - (paddingX * 2);
+  const chartHeight = displayHeight - paddingTop - paddingBottom;
   const barWidth = chartWidth / topWords.length;
   const maxFreq = topWords[0][1]; 
 
-  ctx.font = '11px "JetBrains Mono", monospace';
+  ctx.font = '9px "JetBrains Mono", monospace';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  function shortenLabel(label, maxLength = 12) {
+  function wrapLabel(label, maxLength = 8) {
     const value = String(label || '');
-    if (value.length <= maxLength) return value;
-    return `${value.slice(0, maxLength - 1)}…`;
+    if (!value) return [''];
+
+    const firstLine = value.slice(0, maxLength);
+    const remainder = value.slice(maxLength);
+
+    if (!remainder) return [firstLine];
+
+    const secondLine = remainder.length > maxLength
+      ? `${remainder.slice(0, maxLength - 1)}…`
+      : remainder;
+
+    return [firstLine, secondLine];
   }
 
   topWords.forEach((item, index) => {
-      const word = shortenLabel(item[0]);
+      const lines = wrapLabel(item[0]);
       const freq = item[1];
       const barHeight = (freq / maxFreq) * chartHeight;
       
       const x = paddingX + (index * barWidth);
-      const y = canvas.height - paddingBottom - barHeight;
+      const y = displayHeight - paddingBottom - barHeight;
 
       // Dibujar barra (Color Primary #3B82F6)
       ctx.fillStyle = '#3B82F6';
-      ctx.fillRect(x + 10, y, barWidth - 20, barHeight);
+      ctx.fillRect(x + 8, y, Math.max(10, barWidth - 16), barHeight);
 
       // Etiqueta diagonal debajo de la barra.
-      const labelX = x + (barWidth / 2) - 8;
-      const labelY = canvas.height - 18;
+      const labelX = x + (barWidth / 2) - 4;
+      const labelY = displayHeight - 18;
       ctx.save();
       ctx.translate(labelX, labelY);
       ctx.rotate(-Math.PI / 4);
       ctx.fillStyle = '#94A3B8';
-      ctx.fillText(word, 0, 0);
+      lines.forEach((line, lineIndex) => {
+        ctx.fillText(line, 0, lineIndex * 10);
+      });
       ctx.restore();
 
       // Número encima de la barra

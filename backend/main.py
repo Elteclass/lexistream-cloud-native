@@ -265,8 +265,20 @@ def system_telemetry():
 
                         previous_count = seen_log_count_by_worker.get(wid)
 
-                        # First time we see a worker, consume the current window as already known.
+                        # First time we see a worker, emit the current window once so
+                        # the dashboard can show the existing log stream immediately.
                         if previous_count is None:
+                            if entries:
+                                for raw_entry in reversed(entries):
+                                    if not raw_entry:
+                                        continue
+                                    try:
+                                        entry_obj = json.loads(raw_entry)
+                                    except Exception:
+                                        entry_obj = {"message": raw_entry}
+
+                                    yield f"event: log\ndata: {json.dumps(entry_obj)}\n\n"
+
                             seen_log_count_by_worker[wid] = len(entries)
                             continue
 

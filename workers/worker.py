@@ -130,6 +130,7 @@ def start_heartbeat():
 
 # Start heartbeat background task
 start_heartbeat()
+push_worker_log('INFO', 'Worker started and waiting for tasks')
 
 while True:
     try:
