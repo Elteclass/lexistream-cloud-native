@@ -28,7 +28,21 @@ ALLOWED_EXTENSIONS = {".txt", ".pdf"}
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 REDIS_URL = os.getenv("REDIS_URL", "redis://state_cache:6379")
 
-r = redis.from_url(REDIS_URL, decode_responses=True)
+def wait_for_redis(url, timeout=30, interval=1):
+    deadline = time.time() + timeout
+    last_exc = None
+    while time.time() < deadline:
+        try:
+            client = redis.from_url(url, decode_responses=True)
+            client.ping()
+            return client
+        except Exception as e:
+            last_exc = e
+            time.sleep(interval)
+    raise RuntimeError(f"Could not connect to Redis at {url}: {last_exc}")
+
+REDIS_WAIT_TIMEOUT = int(os.getenv("REDIS_WAIT_TIMEOUT", "30"))
+r = wait_for_redis(REDIS_URL, timeout=REDIS_WAIT_TIMEOUT)
 
 # Telemetry config
 WORKER_STALE_SECONDS = int(os.getenv("WORKER_STALE_SECONDS", "15"))
@@ -212,7 +226,7 @@ def system_telemetry():
     """
     def event_generator():
         last_snapshot = None
-        last_log_by_worker = {}
+        seen_log_count_by_worker = {}
 
         try:
             while True:
@@ -238,7 +252,7 @@ def system_telemetry():
                         last_snapshot = snap_text
                         yield f"event: telemetry\ndata: {snap_text}\n\n"
 
-                    # Check per-worker latest log entries
+                    # Check per-worker latest log entries without replaying old ones.
                     for w in workers:
                         wid = w.get("worker_id")
                         if not wid:
@@ -249,24 +263,28 @@ def system_telemetry():
                         except Exception:
                             entries = []
 
-                        # iterate newest-first and yield any not yet seen (in reverse to preserve order)
-                        for raw_entry in reversed(entries):
-                            if not raw_entry:
-                                continue
-                            last_seen_raw = last_log_by_worker.get(wid)
-                            if last_seen_raw == raw_entry:
-                                # already seen this and everything newer (since we reversed)
-                                break
-                            # yield this log
-                            try:
-                                entry_obj = json.loads(raw_entry)
-                            except Exception:
-                                entry_obj = {"message": raw_entry}
+                        previous_count = seen_log_count_by_worker.get(wid)
 
-                            yield f"event: log\ndata: {json.dumps(entry_obj)}\n\n"
+                        # First time we see a worker, consume the current window as already known.
+                        if previous_count is None:
+                            seen_log_count_by_worker[wid] = len(entries)
+                            continue
 
-                        if entries:
-                            last_log_by_worker[wid] = entries[0]
+                        if len(entries) > previous_count:
+                            new_entries = entries[: len(entries) - previous_count]
+
+                            # Emit in chronological order among the newly received items.
+                            for raw_entry in reversed(new_entries):
+                                if not raw_entry:
+                                    continue
+                                try:
+                                    entry_obj = json.loads(raw_entry)
+                                except Exception:
+                                    entry_obj = {"message": raw_entry}
+
+                                yield f"event: log\ndata: {json.dumps(entry_obj)}\n\n"
+
+                        seen_log_count_by_worker[wid] = len(entries)
 
                 except GeneratorExit:
                     break

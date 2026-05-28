@@ -1,7 +1,23 @@
-'use strict';
+"use strict";
 
 /*CONSTANTS*/
-const BACKEND_URL = 'http://localhost:8000';
+// Resolve backend URL in this order:
+// 1. <meta name="backend-url" content="..."> if present in HTML
+// 2. If served from localhost, assume backend at port 8000
+// 3. Otherwise, use same origin (window.location.origin)
+const BACKEND_URL = (function() {
+  try {
+    const meta = document.querySelector('meta[name="backend-url"]');
+    if (meta && meta.content) return meta.content.replace(/\/$/, '');
+  } catch (e) {}
+
+  const host = window.location.hostname;
+  if (host === 'localhost' || host === '127.0.0.1') {
+    return `${window.location.protocol}//${host}:8000`;
+  }
+
+  return window.location.origin;
+})();
 const ALLOWED_TYPES = ['.txt', '.pdf'];
 const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
 
@@ -41,6 +57,7 @@ let telemetrySource = null;
 let dashboardWorkers = [];
 const logsByWorker = {};
 const MAX_LOG_LINES_PER_WORKER = 70;
+let telemetryMode = 'mock';
 const tabs = Array.from(document.querySelectorAll('.main-tab'));
 const tabPanels = {
   'tab-analyzer': analyzerPanel,
@@ -145,6 +162,7 @@ function getRelativeAge(timestamp) {
 function renderLogGroups() {
   if (!systemLogGroupsEl) return;
 
+  const previouslyOpenWorker = systemLogGroupsEl.querySelector('details[open]')?.dataset.workerId || null;
   const workerIds = Object.keys(logsByWorker).sort((a, b) => a.localeCompare(b));
   systemLogGroupsEl.innerHTML = '';
 
@@ -160,7 +178,14 @@ function renderLogGroups() {
     const lines = logsByWorker[workerId] || [];
     const details = document.createElement('details');
     details.className = 'system-log-group';
-    details.open = index === 0;
+    details.dataset.workerId = workerId;
+    details.open = previouslyOpenWorker ? previouslyOpenWorker === workerId : index === 0;
+
+    details.addEventListener('toggle', () => {
+      if (details.open) {
+        telemetryMode = 'live';
+      }
+    });
 
     const summary = document.createElement('summary');
     summary.className = 'system-log-group__summary';
@@ -248,10 +273,19 @@ function renderTelemetrySnapshot(payload) {
   dashboardWorkers = workers;
   renderDashboardSummary(workers);
   renderWorkerCards(workers);
+
+  if (telemetryMode === 'live') {
+    Object.keys(logsByWorker).forEach((workerId) => {
+      if (workerId.startsWith('wk-nx-')) {
+        delete logsByWorker[workerId];
+      }
+    });
+  }
 }
 
 function seedDashboardFallback() {
   if (dashboardWorkers.length > 0) return;
+  telemetryMode = 'mock';
   renderTelemetrySnapshot(dashboardFallback);
   Object.entries(dashboardFallback.logs).forEach(([workerId, entries]) => {
     logsByWorker[workerId] = entries.slice();
@@ -271,10 +305,9 @@ async function loadTelemetrySnapshot() {
     }
 
     const payload = await response.json();
+    telemetryMode = 'live';
     renderTelemetrySnapshot(payload);
-    if (!Array.isArray(payload.workers) || payload.workers.length === 0) {
-      seedDashboardFallback();
-    }
+    renderLogGroups();
   } catch (error) {
     console.warn('[LexiStream] Unable to load telemetry snapshot:', error);
     seedDashboardFallback();
