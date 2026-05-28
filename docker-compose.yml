@@ -29,6 +29,8 @@ services:
     build: 
       context: ./workers
     container_name: text_worker_01
+    env_file:
+      - .env
     environment:
       - WORKER_ID=worker-01
       - REDIS_URL=redis://state_cache:6379
@@ -40,6 +42,8 @@ services:
     build: 
       context: ./workers
     container_name: text_worker_02
+    env_file:
+      - .env
     environment:
       - WORKER_ID=worker-02
       - REDIS_URL=redis://state_cache:6379
@@ -51,6 +55,8 @@ services:
     build: 
       context: ./workers
     container_name: text_worker_03
+    env_file:
+      - .env
     environment:
       - WORKER_ID=worker-03
       - REDIS_URL=redis://state_cache:6379

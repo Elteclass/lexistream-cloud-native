@@ -712,3 +712,97 @@ body {
     transform: rotate(360deg);
   }
 }
+
+/* ═══════════════════════════════════════════════════
+   ISSUE #3: ESTILOS DEL PANEL ANALÍTICO (RIGHT PANEL)
+════════════════════════════════════════════════════ */
+
+.analytical-panel {
+  padding: 2rem 3rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.panel-header {
+  margin-bottom: 2rem;
+  border-bottom: 1px solid #334155; /* Línea separadora */
+  padding-bottom: 1rem;
+}
+
+.analytical-title {
+  font-size: 1.25rem;
+  font-weight: 500;
+  color: #f8fafc;
+  margin: 0 0 0.5rem 0;
+}
+
+.subtitle {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  display: flex;         /* Agregado para el ícono SVG */
+  align-items: center;   /* Alineación vertical perfecta */
+  gap: 0.5rem;           /* Espacio entre el ícono y el texto */
+}
+
+/* Tarjetas Numéricas */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.metric-card, .summary-box, .chart-box {
+  background-color: #0f172a; /* Fondo oscuro de tarjeta */
+  border: 1px solid #1e293b; /* Borde sutil */
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.metric-label {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin: 0 0 0.5rem 0;
+}
+
+.metric-value {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #f8fafc;
+  margin: 0;
+}
+
+/* Grid Inferior (Resumen y Gráfica) */
+.content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.box-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  color: #f8fafc;
+  margin: 0 0 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.summary-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.canvas-container {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  height: 250px;
+}
