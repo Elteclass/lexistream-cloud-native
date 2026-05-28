@@ -3,6 +3,8 @@ import os
 import json
 import re
 import io
+import threading
+import asyncio
 from collections import Counter
 import boto3
 import redis
@@ -11,6 +13,8 @@ from pypdf import PdfReader
 # Extraemos la configuración del entorno inyectada por Docker Compose
 worker_id = os.getenv("WORKER_ID", "worker-desconocido")
 redis_url = os.getenv("REDIS_URL", "redis://state_cache:6379")
+HEARTBEAT_INTERVAL = int(os.getenv("HEARTBEAT_INTERVAL", "5"))
+LOGS_CAP = int(os.getenv("WORKER_LOGS_CAP", "200"))
 
 print(f"[{worker_id}] Inicializando clientes AWS y Redis...")
 
@@ -77,6 +81,56 @@ def analyze_text(text):
 
 print(f"[{worker_id}] Iniciando y esperando tareas de AWS SQS...")
 
+# Telemetry / heartbeat state
+start_time = time.time()
+tasks_done = 0
+worker_state = 'IDLE'
+
+def push_worker_log(level, message):
+    try:
+        entry = json.dumps({
+            "timestamp": int(time.time()),
+            "worker_id": worker_id,
+            "state": level,
+            "message": message
+        })
+        key = f"system:workers_logs:{worker_id}"
+        r.lpush(key, entry)
+        r.ltrim(key, 0, LOGS_CAP - 1)
+    except Exception:
+        # avoid crashing worker if Redis logging fails
+        pass
+
+async def heartbeat_loop():
+    while True:
+        try:
+            uptime = int(time.time() - start_time)
+            payload = {
+                "worker_id": worker_id,
+                "state": worker_state,
+                "uptime": uptime,
+                "tasks_done": tasks_done,
+                "last_seen": int(time.time())
+            }
+            # store as a hash field for easy snapshotting
+            r.hset("system:workers_status", worker_id, json.dumps(payload))
+        except Exception:
+            pass
+        await asyncio.sleep(HEARTBEAT_INTERVAL)
+
+def start_heartbeat():
+    def _runner():
+        try:
+            asyncio.run(heartbeat_loop())
+        except Exception:
+            return
+
+    t = threading.Thread(target=_runner, daemon=True)
+    t.start()
+
+# Start heartbeat background task
+start_heartbeat()
+
 while True:
     try:
         # Long Polling a la cola SQS
@@ -100,7 +154,9 @@ while True:
 
                 print(f"[{worker_id}] Procesando tarea: {task_id} | Archivo: {filename}")
 
-                # 1. Actualizar estado a "en proceso" en Redis
+                # 1. Mark worker state and update task state in Redis
+                worker_state = 'PROCESSING'
+                push_worker_log('INFO', f'Starting processing {task_id} ({filename})')
                 r.set(task_id, json.dumps({"status": "en proceso"}))
 
                 # 2. Descargar archivo desde S3
@@ -123,6 +179,11 @@ while True:
                     "resultados": resultados
                 }))
 
+                # Worker bookkeeping
+                tasks_done += 1
+                worker_state = 'IDLE'
+                push_worker_log('INFO', f'Completed {task_id} successfully')
+
                 # 6. Eliminar el mensaje de la cola para evitar procesamiento duplicado
                 sqs.delete_message(
                     QueueUrl=QUEUE_URL,
@@ -131,8 +192,11 @@ while True:
                 print(f"[{worker_id}] Tarea {task_id} finalizada exitosamente.")
         else:
             # Si no hay mensajes, el worker sigue vivo gracias a este pass y WaitTimeSeconds de AWS
-            pass
+            worker_state = 'IDLE'
+            # no-op, heartbeat will continue publishing status
             
     except Exception as e:
         print(f"[{worker_id}] Error durante el procesamiento: {str(e)}")
+        push_worker_log('ERROR', f'Processing loop error: {str(e)}')
+        worker_state = 'DOWN'
         time.sleep(5)
