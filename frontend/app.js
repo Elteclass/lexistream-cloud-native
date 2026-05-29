@@ -159,6 +159,34 @@ function getRelativeAge(timestamp) {
   return `${Math.floor(delta / 3600)}h ago`;
 }
 
+function buildLogEntrySignature(entry) {
+  const timestamp = Number(entry?.timestamp) || 0;
+  const state = String(entry?.state || 'INFO');
+  const message = String(entry?.message || entry?.state || 'event received');
+  return `${timestamp}|${state}|${message}`;
+}
+
+function appendWorkerLogEntry(workerId, entry) {
+  if (!logsByWorker[workerId]) logsByWorker[workerId] = [];
+  const lines = logsByWorker[workerId];
+
+  // SSE reconnects can replay the latest event; ignore exact back-to-back duplicates.
+  if (lines.length > 0) {
+    const lastEntry = lines[lines.length - 1];
+    if (buildLogEntrySignature(lastEntry) === buildLogEntrySignature(entry)) {
+      return false;
+    }
+  }
+
+  lines.push(entry);
+
+  if (lines.length > MAX_LOG_LINES_PER_WORKER) {
+    logsByWorker[workerId] = lines.slice(-MAX_LOG_LINES_PER_WORKER);
+  }
+
+  return true;
+}
+
 function renderLogGroups() {
   if (!systemLogGroupsEl) return;
 
@@ -341,12 +369,10 @@ function openTelemetryStream() {
     telemetrySource.addEventListener('log', (event) => {
       const entry = JSON.parse(event.data);
       const workerId = entry.worker_id || 'system';
-      if (!logsByWorker[workerId]) logsByWorker[workerId] = [];
-      logsByWorker[workerId].push(entry);
-      if (logsByWorker[workerId].length > MAX_LOG_LINES_PER_WORKER) {
-        logsByWorker[workerId] = logsByWorker[workerId].slice(-MAX_LOG_LINES_PER_WORKER);
+      const wasAppended = appendWorkerLogEntry(workerId, entry);
+      if (wasAppended) {
+        renderLogGroups();
       }
-      renderLogGroups();
     });
 
     telemetrySource.onerror = () => {

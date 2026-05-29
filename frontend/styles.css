@@ -72,7 +72,8 @@ body {
   color: var(--text-primary);
   min-height: 100vh;
   display: flex;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -585,7 +586,8 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-height: 100vh;
+  overflow: visible;
   background: var(--color-bg);
 }
 
@@ -941,7 +943,8 @@ body {
 
 .main-panel {
   flex: 1;
-  overflow: auto;
+  min-height: 0;
+  overflow: visible;
   padding: 18px 20px;
 }
 
@@ -950,6 +953,7 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: visible;
 }
 
 .dashboard-hero {
@@ -1184,9 +1188,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  flex: 1;
+  flex: none;
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
   padding-right: 4px;
 }
 
