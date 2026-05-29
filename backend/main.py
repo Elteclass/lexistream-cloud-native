@@ -28,7 +28,25 @@ ALLOWED_EXTENSIONS = {".txt", ".pdf"}
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 REDIS_URL = os.getenv("REDIS_URL", "redis://state_cache:6379")
 
-r = redis.from_url(REDIS_URL, decode_responses=True)
+def wait_for_redis(url, timeout=30, interval=1):
+    deadline = time.time() + timeout
+    last_exc = None
+    while time.time() < deadline:
+        try:
+            client = redis.from_url(url, decode_responses=True)
+            client.ping()
+            return client
+        except Exception as e:
+            last_exc = e
+            time.sleep(interval)
+    raise RuntimeError(f"Could not connect to Redis at {url}: {last_exc}")
+
+REDIS_WAIT_TIMEOUT = int(os.getenv("REDIS_WAIT_TIMEOUT", "30"))
+r = wait_for_redis(REDIS_URL, timeout=REDIS_WAIT_TIMEOUT)
+
+# Telemetry config
+WORKER_STALE_SECONDS = int(os.getenv("WORKER_STALE_SECONDS", "15"))
+LOGS_FETCH_LIMIT = int(os.getenv("LOGS_FETCH_LIMIT", "10"))
 
 
 @app.get("/")
@@ -169,5 +187,125 @@ def stream_task(task_id: str):
                 last_payload = payload
                 yield f"data: {payload}\n\n"
             time.sleep(1)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+
+@app.get("/api/system-telemetry/snapshot")
+def telemetry_snapshot():
+    """Return a JSON snapshot of current workers read from Redis.
+
+    The Redis hash `system:workers_status` is expected to contain per-worker JSON payloads.
+    """
+    try:
+        raw = r.hgetall("system:workers_status") or {}
+        workers = []
+        now_ts = int(time.time())
+        for wid, payload in raw.items():
+            try:
+                obj = json.loads(payload)
+            except Exception:
+                # skip malformed entries
+                continue
+            # mark stale workers as DOWN
+            last = int(obj.get("last_seen", 0))
+            if now_ts - last > WORKER_STALE_SECONDS:
+                obj["state"] = "DOWN"
+            workers.append(obj)
+
+        return {"workers": workers}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Telemetry snapshot error: {str(e)}")
+
+
+@app.get("/api/system-telemetry")
+def system_telemetry():
+    """SSE stream that emits `telemetry` events (fleet snapshot) and `log` events (per-worker latest logs).
+
+    Polls Redis regularly and yields SSE events when changes are observed.
+    """
+    def event_generator():
+        last_snapshot = None
+        seen_log_count_by_worker = {}
+
+        try:
+            while True:
+                try:
+                    raw = r.hgetall("system:workers_status") or {}
+                    now_ts = int(time.time())
+                    workers = []
+
+                    for wid, payload in raw.items():
+                        try:
+                            obj = json.loads(payload)
+                        except Exception:
+                            continue
+                        last = int(obj.get("last_seen", 0))
+                        if now_ts - last > WORKER_STALE_SECONDS:
+                            obj["state"] = "DOWN"
+                        workers.append(obj)
+
+                    snapshot = {"workers": workers}
+
+                    snap_text = json.dumps(snapshot, sort_keys=True)
+                    if snap_text != last_snapshot:
+                        last_snapshot = snap_text
+                        yield f"event: telemetry\ndata: {snap_text}\n\n"
+
+                    # Check per-worker latest log entries without replaying old ones.
+                    for w in workers:
+                        wid = w.get("worker_id")
+                        if not wid:
+                            continue
+                        key = f"system:workers_logs:{wid}"
+                        try:
+                            entries = r.lrange(key, 0, LOGS_FETCH_LIMIT - 1) or []
+                        except Exception:
+                            entries = []
+
+                        previous_count = seen_log_count_by_worker.get(wid)
+
+                        # First time we see a worker, emit the current window once so
+                        # the dashboard can show the existing log stream immediately.
+                        if previous_count is None:
+                            if entries:
+                                for raw_entry in reversed(entries):
+                                    if not raw_entry:
+                                        continue
+                                    try:
+                                        entry_obj = json.loads(raw_entry)
+                                    except Exception:
+                                        entry_obj = {"message": raw_entry}
+
+                                    yield f"event: log\ndata: {json.dumps(entry_obj)}\n\n"
+
+                            seen_log_count_by_worker[wid] = len(entries)
+                            continue
+
+                        if len(entries) > previous_count:
+                            new_entries = entries[: len(entries) - previous_count]
+
+                            # Emit in chronological order among the newly received items.
+                            for raw_entry in reversed(new_entries):
+                                if not raw_entry:
+                                    continue
+                                try:
+                                    entry_obj = json.loads(raw_entry)
+                                except Exception:
+                                    entry_obj = {"message": raw_entry}
+
+                                yield f"event: log\ndata: {json.dumps(entry_obj)}\n\n"
+
+                        seen_log_count_by_worker[wid] = len(entries)
+
+                except GeneratorExit:
+                    break
+                except Exception:
+                    # Avoid bubbling errors to the client; continue polling
+                    pass
+
+                time.sleep(1)
+        finally:
+            return
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")

@@ -109,29 +109,30 @@
   ════════════════════════════════════════════════════ -->
   <main class="main-content" role="main">
 
-    <nav class="main-tabs" role="tablist">
-      <button class="main-tab main-tab--active" role="tab">Analyzer &amp; Results</button>
-      <button class="main-tab" role="tab">System Dashboard</button>
+    <nav class="main-tabs" role="tablist" aria-label="Main tabs">
+      <button class="main-tab main-tab--active" role="tab" aria-selected="true" id="tab-analyzer">Analyzer &amp; Results</button>
+      <button class="main-tab" role="tab" aria-selected="false" id="tab-dashboard">System Dashboard</button>
     </nav>
 
-    <section class="processed-section" aria-label="Processed files">
-      <div class="processed-header">
-        <h2 class="processed-title">Processed Files</h2>
-        <span class="processed-count" id="processed-count" aria-live="polite">0</span>
-      </div>
+    <section id="analyzer-panel" class="main-panel analyzer-panel" role="tabpanel" aria-labelledby="tab-analyzer">
+      <section class="processed-section" aria-label="Processed files">
+        <div class="processed-header">
+          <h2 class="processed-title">Processed Files</h2>
+          <span class="processed-count" id="processed-count" aria-live="polite">0</span>
+        </div>
 
-      <ul id="processed-list" class="processed-list" role="list" aria-live="polite">
-        <li class="processed-empty" id="processed-empty-msg">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M3 3h18v18H3z" opacity=".1" fill="currentColor" />
-            <path d="M3 3h18v18H3z" />
-          </svg>
-          No processed files yet
-        </li>
-      </ul>
-    </section>
+        <ul id="processed-list" class="processed-list" role="list" aria-live="polite">
+          <li class="processed-empty" id="processed-empty-msg">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M3 3h18v18H3z" opacity=".1" fill="currentColor" />
+              <path d="M3 3h18v18H3z" />
+            </svg>
+            No processed files yet
+          </li>
+        </ul>
+      </section>
 
-    <div id="analytical-panel" class="analytical-panel">
+      <div id="analytical-panel" class="analytical-panel">
         
        <div class="panel-header">
             <h2 class="analytical-title">Analytical Results</h2>
@@ -174,13 +175,53 @@
                 <div class="chart-box">
                     <p class="box-label">Word Frequency</p>
                     <div class="canvas-container">
-                        <canvas id="wordChart" width="300" height="250"></canvas>
+                    <canvas id="wordChart" width="220" height="170"></canvas>
                     </div>
                 </div>
             </div>
             
         </div>
-    </div>
+      </div>
+    </section>
+
+    <section id="dashboard-panel" class="main-panel system-dashboard" role="tabpanel" aria-labelledby="tab-dashboard" hidden>
+      <header class="dashboard-hero">
+        <div>
+          <div class="dashboard-kicker">System Dashboard</div>
+          <h1 class="dashboard-title">Infrastructure Monitor</h1>
+          <p class="dashboard-copy">Real-time telemetry and worker node oversight.</p>
+        </div>
+        <div class="dashboard-connection" id="dashboard-connection-status">SYS.CONN: DISCONNECTED</div>
+      </header>
+
+      <section class="dashboard-stats" aria-label="Fleet summary">
+        <article class="stat-card">
+          <span class="stat-label">Workers</span>
+          <span class="stat-value" id="dashboard-total-count">0</span>
+        </article>
+        <article class="stat-card stat-card--idle">
+          <span class="stat-label">IDLE</span>
+          <span class="stat-value" id="dashboard-idle-count">0</span>
+        </article>
+        <article class="stat-card stat-card--processing">
+          <span class="stat-label">PROCESSING</span>
+          <span class="stat-value" id="dashboard-processing-count">0</span>
+        </article>
+        <article class="stat-card stat-card--down">
+          <span class="stat-label">DOWN</span>
+          <span class="stat-value" id="dashboard-down-count">0</span>
+        </article>
+      </section>
+
+      <section class="worker-grid" id="worker-grid" aria-label="Worker status cards"></section>
+
+      <section class="system-log-accordion">
+        <div class="system-log-accordion__title">
+          <span>System Log Stream (SSE)</span>
+        </div>
+        <div id="system-log-groups" class="system-log-groups" aria-live="polite" aria-relevant="additions text"></div>
+      </section>
+    </section>
   </main>
 
   <!-- ── Upload progress overlay ── -->
