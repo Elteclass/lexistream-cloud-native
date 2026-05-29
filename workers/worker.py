@@ -2,9 +2,11 @@ import time
 import os
 import json
 import re
+import io
 from collections import Counter
 import boto3
 import redis
+from pypdf import PdfReader
 
 # Extraemos la configuración del entorno inyectada por Docker Compose
 worker_id = os.getenv("WORKER_ID", "worker-desconocido")
@@ -20,12 +22,26 @@ r = redis.from_url(redis_url, decode_responses=True)
 QUEUE_URL = os.getenv('SQS_QUEUE_URL')
 BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
 
-# Diccionario heurístico para la clasificación (rápido y sin LLMs)
+# Diccionario heuristico para la clasificacion (rapido y sin LLMs)
 CATEGORIES = {
     "Technology": ["servidor", "nube", "software", "datos", "código", "red", "api", "tecnología"],
     "Finance": ["inversión", "mercado", "inflación", "capital", "acciones", "dinero", "banco", "finanzas"],
     "Science": ["investigación", "experimento", "molécula", "hipótesis", "laboratorio", "ciencia"]
 }
+
+def decode_text_bytes(raw_bytes):
+    try:
+        return raw_bytes.decode('utf-8')
+    except UnicodeDecodeError:
+        return raw_bytes.decode('latin-1', errors='ignore')
+
+def extract_text_from_pdf(raw_bytes):
+    reader = PdfReader(io.BytesIO(raw_bytes))
+    pages_text = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        pages_text.append(text)
+    return "\n".join(pages_text).strip()
 
 def analyze_text(text):
     words = re.findall(r'\b\w+\b', text.lower())
@@ -89,18 +105,25 @@ while True:
 
                 # 2. Descargar archivo desde S3
                 s3_object = s3.get_object(Bucket=BUCKET_NAME, Key=filename)
-                text_content = s3_object['Body'].read().decode('utf-8')
+                raw_bytes = s3_object['Body'].read()
 
-                # 3. Analizar el texto
+                # 3. Extraer texto segun extension
+                ext = os.path.splitext(filename)[-1].lower()
+                if ext == '.pdf':
+                    text_content = extract_text_from_pdf(raw_bytes)
+                else:
+                    text_content = decode_text_bytes(raw_bytes)
+
+                # 4. Analizar el texto
                 resultados = analyze_text(text_content)
 
-                # 4. Actualizar estado a "completada" con los resultados
+                # 5. Actualizar estado a "completada" con los resultados
                 r.set(task_id, json.dumps({
                     "status": "completada",
                     "resultados": resultados
                 }))
 
-                # 5. Eliminar el mensaje de la cola para evitar procesamiento duplicado
+                # 6. Eliminar el mensaje de la cola para evitar procesamiento duplicado
                 sqs.delete_message(
                     QueueUrl=QUEUE_URL,
                     ReceiptHandle=msg['ReceiptHandle']

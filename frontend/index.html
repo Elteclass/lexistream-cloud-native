@@ -114,6 +114,23 @@
       <button class="main-tab" role="tab">System Dashboard</button>
     </nav>
 
+    <section class="processed-section" aria-label="Processed files">
+      <div class="processed-header">
+        <h2 class="processed-title">Processed Files</h2>
+        <span class="processed-count" id="processed-count" aria-live="polite">0</span>
+      </div>
+
+      <ul id="processed-list" class="processed-list" role="list" aria-live="polite">
+        <li class="processed-empty" id="processed-empty-msg">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 3h18v18H3z" opacity=".1" fill="currentColor" />
+            <path d="M3 3h18v18H3z" />
+          </svg>
+          No processed files yet
+        </li>
+      </ul>
+    </section>
+
     <div id="analytical-panel" class="analytical-panel">
         
        <div class="panel-header">

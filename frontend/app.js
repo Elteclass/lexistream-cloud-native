@@ -16,6 +16,9 @@ const uploadErrorMsg = document.getElementById('upload-error-msg');
 const uploadToast = document.getElementById('upload-toast');
 const uploadToastMsg = document.getElementById('upload-toast-msg');
 const queueEmptyMsg = document.getElementById('queue-empty-msg');
+const processedListEl = document.getElementById('processed-list');
+const processedCountEl = document.getElementById('processed-count');
+const processedEmptyMsg = document.getElementById('processed-empty-msg');
 
 /*
 LOCAL QUEUE STATE
@@ -24,6 +27,7 @@ status: 'pending' | 'uploading' | 'success' | 'error'
 */
 let queue = [];
 let idCounter = 0;
+const processedTasks = new Map();
 
 /*UTILITIES*/
 /** Format bytes to human-readable string */
@@ -55,6 +59,61 @@ function showToast(msg) {
 }
 function hideToast() {
   uploadToast.hidden = true;
+}
+
+function statusToLabel(status) {
+  if (status === 'pendiente') return 'Pendiente';
+  if (status === 'en proceso') return 'En proceso';
+  if (status === 'completada') return 'Completada';
+  return 'Error';
+}
+
+function statusToClass(status) {
+  if (status === 'pendiente') return 'pending';
+  if (status === 'en proceso') return 'processing';
+  if (status === 'completada') return 'completed';
+  return 'error';
+}
+
+function renderProcessedEmptyState() {
+  processedEmptyMsg.style.display = processedTasks.size === 0 ? 'flex' : 'none';
+  processedCountEl.textContent = String(processedTasks.size);
+}
+
+function createProcessedCard(taskId, filename) {
+  const li = document.createElement('li');
+  li.className = 'processed-item pending';
+  li.dataset.taskId = taskId;
+  li.innerHTML = `
+    <div class="processed-item__name" title="${filename}">${filename}</div>
+    <div class="processed-item__meta">
+      <span class="processed-item__status">Pendiente</span>
+      <span class="processed-item__id">${taskId.slice(0, 8)}</span>
+    </div>
+  `;
+
+  li.addEventListener('click', () => {
+    const taskData = processedTasks.get(taskId);
+    if (!taskData) return;
+    window.renderAnalyticalResults(filename, taskData);
+  });
+
+  processedListEl.appendChild(li);
+  renderProcessedEmptyState();
+}
+
+function updateProcessedCard(taskId, taskData) {
+  const card = processedListEl.querySelector(`[data-task-id="${taskId}"]`);
+  if (!card) return;
+
+  const statusClass = statusToClass(taskData.status);
+  card.classList.remove('pending', 'processing', 'completed', 'error');
+  card.classList.add(statusClass);
+
+  const statusEl = card.querySelector('.processed-item__status');
+  if (statusEl) {
+    statusEl.textContent = statusToLabel(taskData.status);
+  }
 }
 
 /*CLIENT-SIDE VALIDATION
@@ -269,6 +328,50 @@ async function uploadToS3(presignedUrl, file) {
   }
 }
 
+async function enqueueProcessing(filename) {
+  const response = await fetch(`${BACKEND_URL}/api/process`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({ filename }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Server error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function openEventStream(taskId, filename) {
+  const source = new EventSource(`${BACKEND_URL}/api/stream/${taskId}`);
+
+  source.onmessage = (event) => {
+    try {
+      const taskData = JSON.parse(event.data);
+      processedTasks.set(taskId, taskData);
+      updateProcessedCard(taskId, taskData);
+
+      if (taskData.status === 'completada') {
+        source.close();
+      }
+    } catch (err) {
+      console.error('[LexiStream] SSE parse error:', err);
+    }
+  };
+
+  source.onerror = () => {
+    const taskData = processedTasks.get(taskId) || { status: 'error', filename };
+    taskData.status = 'error';
+    processedTasks.set(taskId, taskData);
+    updateProcessedCard(taskId, taskData);
+    source.close();
+  };
+}
+
 /*PROCESS A SINGLE QUEUE ENTRY*/
 async function processEntry(entry) {
   // 1. Mark as uploading
@@ -282,7 +385,13 @@ async function processEntry(entry) {
     // 3. PUT file directly to S3
     await uploadToS3(presignedUrl, entry.file);
 
-    // 4. Success
+    // 4. Enqueue processing task
+    const { task_id: taskId } = await enqueueProcessing(entry.file.name);
+    processedTasks.set(taskId, { status: 'pendiente', filename: entry.file.name });
+    createProcessedCard(taskId, entry.file.name);
+    openEventStream(taskId, entry.file.name);
+
+    // 5. Success
     entry.status = 'success';
   } catch (err) {
     console.error(`[LexiStream] Error uploading "${entry.file.name}":`, err);
@@ -334,6 +443,7 @@ document.querySelectorAll('.main-tab').forEach(tab => {
 
 /*INITIAL RENDER*/
 renderQueue();
+renderProcessedEmptyState();
 
 /* ═══════════════════════════════════════════════════
    ISSUE #3: MOTOR DE ANÁLISIS Y VISUALIZACIÓN
